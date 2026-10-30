@@ -19,6 +19,21 @@ function rod(parent,a,b,r,material) { const av=Array.isArray(a)?V(...a):a,bv=Arr
 function ring(parent,radius,tubeRadius,material,p) {return mesh(new THREE.TorusGeometry(radius,tubeRadius,12,64),material,parent,V(...p));}
 function seeded(seed) {return () => {seed = (seed * 1664525 + 1013904223) >>> 0;return seed / 4294967296;};}
 const random = seeded(81);
+const route = { a:5.95, b:5.95*.86, height:.175, wheelRadius:.695, axleHeight:.86, speed:1.2 };
+let wheelPhase=0, pedalPhase=0, neck, pouch, chest, tailFan, scarfCloth;
+const eyes=[], wings=[], pedals=[];
+function routePose(theta) {
+  // The model faces local +X; a positive Y rotation turns +X toward -Z.
+  const tangent=V(route.a*Math.sin(theta),0,-route.b*Math.cos(theta)).normalize();
+  return {position:V(route.a*Math.cos(theta),route.height-route.axleHeight+route.wheelRadius,route.b*Math.sin(theta)),yaw:Math.atan2(-tangent.z,tangent.x),tangent};
+}
+function placeRider(){const p=routePose(state.angle);rider.position.copy(p.position);rider.rotation.set(0,p.yaw,0);}
+function organicTube(parent,points,radii,material,segments=36,sides=14){
+  const curve=new THREE.CatmullRomCurve3(points.map(p=>V(...p))),frames=curve.computeFrenetFrames(segments,false),vertices=[],indices=[];
+  for(let i=0;i<=segments;i++){const t=i/segments,p=curve.getPointAt(t),f=t*(radii.length-1),j=Math.min(Math.floor(f),radii.length-2),r=THREE.MathUtils.lerp(radii[j],radii[j+1],f-j);
+    for(let k=0;k<=sides;k++){const a=k/sides*Math.PI*2,q=p.clone().addScaledVector(frames.normals[i],Math.cos(a)*r).addScaledVector(frames.binormals[i],Math.sin(a)*r);vertices.push(q.x,q.y,q.z);if(i<segments&&k<sides){const n=i*(sides+1)+k;indices.push(n,n+1,n+sides+1,n+1,n+sides+2,n+sides+1);}}}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));g.setIndex(indices);g.computeVertexNormals();return mesh(g,material,parent);
+}
 
 function init() {
   scene = new THREE.Scene();
@@ -33,13 +48,13 @@ function init() {
   keyLight = new THREE.DirectionalLight(0xffe5bc,3.6);keyLight.position.set(-7,15,10);keyLight.castShadow=true;keyLight.shadow.mapSize.set(2048,2048);Object.assign(keyLight.shadow.camera,{left:-14,right:14,top:14,bottom:-14,near:.5,far:50});keyLight.shadow.normalBias=.025;keyLight.shadow.bias=-.0002;keyLight.shadow.radius=4;scene.add(keyLight);
   const rim = new THREE.DirectionalLight(0xc8f4ed,1.2);rim.position.set(8,7,-8);scene.add(rim);
   Object.assign(mats,{cream:mat(0xfaf2d9),wing:mat(0xe5e5cf),wingTip:mat(0x42564f),orange:mat(0xf0a943),pouch:mat(0xe6a04b),dark:mat(0x2b413d),mint:mat(0x82c9b1,.35,.15),tire:mat(0x354849,.9),rim:mat(0xf3e9cc,.45,.4),metal:mat(0xa3b0a3,.3,.65),coral:mat(0xdb8068),sand:mat(0xeedfc0),grass:mat(0xd1db9a),trunk:mat(0xa99065),leaf:mat(0x66987c),road:mat(0xb6c2ac),paint:mat(0xf6f1db),white:mat(0xf5efd9),roof:mat(0xce7b60),rock:mat(0xb8bd9e)});
-  buildIsland();buildBike();buildPelican();buildScenery();buildAtmosphere();
+  buildIsland();buildBike();buildPelican();buildScenery();buildAtmosphere();placeRider();pose(0);
   setOverview(true);resize();
   // Observe the actual scene box: responsive layout can settle after window.resize.
   new ResizeObserver(resize).observe($('scene'));bindUI();updatePlay();
   renderer.domElement.addEventListener('webglcontextlost',(e)=>{e.preventDefault();state.playing=false;updatePlay();toast('画面暂时休息了，刷新页面即可继续旅程');});
   renderer.compile(scene,camera);renderer.render(scene,camera);$('loading').classList.add('loaded');
-  window.__pelican = {state, renderer, scene, camera, get wheels(){return wheels;},get rider(){return rider;}};
+  window.__pelican = {state, renderer, scene, camera, route, routePose, get wheels(){return wheels;},get rider(){return rider;},legs,pedals,eyes,head,body,pose,placeRider};
   requestAnimationFrame(animate);
 }
 
@@ -88,45 +103,64 @@ function buildBike() {
   for(const y of [.62,1.03])rod(bike,[-1.25,y+.02,.12],[-.15,y,.12],.012,mats.dark);
   crank = new THREE.Group();crank.position.set(-.15,.83,0);bike.add(crank);
   rod(crank,[0,0,-.2],[.32,0,-.2],.028,mats.metal);rod(crank,[0,0,.2],[-.32,0,.2],.028,mats.metal);
-  for(let side of [-1,1]){const pedal=mesh(new THREE.BoxGeometry(.24,.06,.22),mats.dark,crank,V(side*-.32,0,side*.29));pedal.name='pedal';}
+  for(let side of [-1,1]){const pedal=mesh(new THREE.BoxGeometry(.26,.06,.25),mats.dark,crank,V(side*-.32,0,side*.29));pedal.name='pedal';pedal.userData.side=side;pedals.push(pedal);}
   rider.position.set(0,.13,5.12);
 }
 
 function buildPelican() {
   body=new THREE.Group();rider.add(body);
-  const belly=ellipsoid(body,mats.cream,[-.58,2.92,0],[.64,.79,.47]);belly.rotation.z=.24;
-  const rump=ellipsoid(body,mats.cream,[-.98,2.66,0],[.52,.48,.43]);
-  for(let i=0;i<4;i++){const tail=ellipsoid(body,i%2?mats.wing:mats.cream,[-1.27-i*.055,2.66+i*.025,(i-1.5)*.1],[.43,.1,.095]);tail.rotation.z=-.2-i*.08;}
-  tube(body,[[-.42,3.2,0],[-.24,3.58,0],[-.2,3.94,0],[.06,4.17,0],[.35,4.23,0]],.23,mats.cream);
-  head=new THREE.Group();head.position.set(.35,4.28,0);body.add(head);
-  ellipsoid(head,mats.cream,[0,0,0],[.43,.37,.33]);
-  const beak=mesh(new THREE.ConeGeometry(.23,1.48,32),mats.orange,head,V(1.03,-.035,0),V(1,1,.78));beak.rotation.z=-Math.PI/2;
-  ellipsoid(head,mats.pouch,[.79,-.23,0],[.69,.25,.19]);
-  tube(head,[[.24,-.05,.18],[.7,-.065,.13],[1.7,-.04,0]],.012,mats.trunk,20);
-  ellipsoid(head,mats.orange,[1.73,-.05,0],[.07,.055,.055]);
+  chest=ellipsoid(body,mats.cream,[-.65,2.94,0],[.75,.8,.56]);chest.rotation.z=.28;
+  ellipsoid(body,mats.cream,[-1.03,2.62,0],[.52,.43,.48]);
+  ellipsoid(body,mats.white,[-.18,3.05,0],[.39,.53,.43]);
+  tailFan=new THREE.Group();tailFan.position.set(-1.12,2.68,0);body.add(tailFan);
+  for(let i=0;i<7;i++){const f=ellipsoid(tailFan,i%3===0?mats.wing:mats.cream,[-.32-Math.abs(i-3)*.015,0,(i-3)*.065],[.48,.065,.09]);f.rotation.y=(i-3)*.09;f.rotation.z=-.22;}
+  neck=organicTube(body,[[-.43,3.15,0],[-.36,3.51,0],[-.43,3.86,0],[-.28,4.15,0],[.11,4.28,0]],[.32,.29,.21,.19,.26],mats.cream);
+  head=new THREE.Group();head.position.set(.16,4.3,0);body.add(head);
+  ellipsoid(head,mats.cream,[0,0,0],[.46,.4,.36]);
+  ellipsoid(head,mats.white,[.15,-.07,0],[.31,.27,.33]);
+  // A broad bill with a shallow upper ridge and a soft, hanging throat pouch.
+  organicTube(head,[[.25,-.015,0],[.65,.015,0],[1.2,-.025,0],[1.7,-.075,0]],[.17,.15,.095,.018],mats.orange,32,14).scale.y=.55;
+  pouch=ellipsoid(head,mats.pouch,[.85,-.22,0],[.72,.28,.23]);pouch.rotation.z=.055;
   for(const side of [-1,1]){
-    ellipsoid(head,mats.white,[.14,.08,side*.304],[.12,.125,.052]);
-    ellipsoid(head,mats.dark,[.18,.09,side*.35],[.065,.074,.027]);
-    ellipsoid(head,mats.white,[.2,.115,side*.373],[.019,.02,.008]);
-    const brow=ellipsoid(head,mats.wing,[.11,.23,side*.31],[.16,.034,.034]);brow.rotation.z=-.09;
-    ellipsoid(head,mats.pouch,[.05,-.09,side*.32],[.09,.045,.012]);
+    tube(head,[[.3,-.04,side*.18],[.8,-.045,side*.19],[1.45,-.065,side*.08],[1.72,-.06,0]],.009,mats.trunk,24);
+    ellipsoid(head,mats.trunk,[.53,.033,side*.12],[.045,.012,.013]);
+  }
+  ellipsoid(head,mats.orange,[1.72,-.075,0],[.055,.045,.045]);
+  for(const side of [-1,1]){
+    ellipsoid(head,mats.pouch,[.13,.095,side*.326],[.163,.174,.055]);
+    const eye=new THREE.Group();eye.position.set(.15,.1,side*.36);head.add(eye);eyes.push(eye);
+    ellipsoid(eye,mats.white,[0,0,0],[.135,.147,.052]);
+    ellipsoid(eye,mats.dark,[.027,.005,side*.045],[.079,.094,.034]);
+    ellipsoid(eye,mats.white,[.048,.043,side*.072],[.025,.029,.011]);
+    ellipsoid(eye,mats.white,[.003,-.025,side*.073],[.011,.013,.008]);
+    const brow=ellipsoid(head,mats.wing,[.105,.29,side*.33],[.16,.035,.045]);brow.rotation.z=-.17;
+    ellipsoid(head,mats.coral,[.06,-.125,side*.34],[.115,.055,.018]);
+    for(let i=0;i<3;i++){const tuft=ellipsoid(head,mats.cream,[-.31-i*.055,-.07+i*.08,side*.2],[.2,.055,.09]);tuft.rotation.z=-.28+i*.12;}
   }
   // A tiny sea-green cycling cap with a fabric seam and forward visor.
   const cap=mesh(new THREE.SphereGeometry(.405,32,16,0,Math.PI*2,0,Math.PI*.48),mats.mint,head,V(-.03,.1,0),V(1,.77,.94));
   ellipsoid(head,mats.mint,[.33,.16,0],[.29,.035,.26]);rod(head,[-.03,.28,-.29],[-.03,.39,0],.012,mats.cream);rod(head,[-.03,.39,0],[-.03,.28,.29],.012,mats.cream);ellipsoid(head,mats.dark,[-.03,.41,0],[.035,.018,.035]);
-  // Wings lean into the handlebar, with layered feathers along the arm.
+  // Broad folded wings articulate at the elbow; the tips stay on the grips.
   for(const side of [-1,1]){
-    const shoulder=[-.63,3.22,side*.39],elbow=[-.1,2.84,side*.54],hand=[1.08,2.36,side*.4];
-    tube(body,[shoulder,elbow,[.55,2.54,side*.47],hand],.14,mats.wing);
-    for(let i=0;i<4;i++){const feather=ellipsoid(body,i===3?mats.wingTip:mats.cream,[-.17+i*.19,2.92-i*.12,side*(.53-i*.014)],[.32,.075,.08]);feather.rotation.z=-.55;}
-    ellipsoid(body,mats.cream,hand,[.14,.09,.11]);
-    const thigh=new THREE.Group();body.add(thigh);const upper=rod(thigh,[0,0,0],[0,1,0],.065,mats.orange);const lower=rod(thigh,[0,0,0],[0,1,0],.055,mats.orange);const foot=ellipsoid(thigh,mats.orange,[0,0,0],[.22,.06,.16]);legs.push({side,upper,lower,foot});
+    const upper=new THREE.Group(),lower=new THREE.Group();body.add(upper,lower);
+    ellipsoid(upper,mats.wing,[0,0,0],[.26,.62,.18]);
+    for(let i=0;i<5;i++){const f=ellipsoid(upper,i%2?mats.white:mats.cream,[(i-2)*.075,-.12-Math.abs(i-2)*.04,side*.11],[.095,.48,.07]);f.rotation.z=(i-2)*-.07;}
+    ellipsoid(lower,mats.wing,[0,0,0],[.15,.55,.12]);
+    for(let i=0;i<4;i++){const f=ellipsoid(lower,i===0?mats.wingTip:mats.cream,[(i-1.5)*.063,-.055,side*.075],[.065,.48-i*.045,.055]);f.rotation.z=(i-1.5)*-.055;}
+    const hand=ellipsoid(body,mats.cream,[1.09,2.34,side*.4],[.16,.095,.13]);wings.push({side,upper,lower,hand});
+    const upperLeg=rod(body,[0,0,0],[0,1,0],.085,mats.orange),lowerLeg=rod(body,[0,0,0],[0,1,0],.057,mats.orange);
+    const haunch=ellipsoid(body,mats.cream,[0,0,0],[.18,.36,.19]),knee=ellipsoid(body,mats.orange,[0,0,0],[.095,.105,.085]);
+    const foot=new THREE.Group();body.add(foot);
+    const web=new THREE.Shape();web.moveTo(-.11,-.055);web.quadraticCurveTo(.03,-.1,.25,-.16);web.quadraticCurveTo(.3,-.1,.28,-.04);web.quadraticCurveTo(.36,0,.29,.05);web.quadraticCurveTo(.29,.15,.24,.16);web.lineTo(-.11,.055);web.closePath();
+    const webMesh=mesh(new THREE.ExtrudeGeometry(web,{depth:.035,bevelEnabled:true,bevelThickness:.018,bevelSize:.018,bevelSegments:2,steps:1}),mats.orange,foot);webMesh.rotation.x=-Math.PI/2;
+    for(const z of [-.11,0,.11])tube(foot,[[-.07,.04,0],[.09,.045,z*.5],[.25,.025,z]],.013,mats.pouch,8);
+    legs.push({side,upper:upperLeg,lower:lowerLeg,foot,haunch,knee});
   }
   // The coral neckerchief streams behind the rider.
   ellipsoid(body,mats.coral,[-.23,3.67,0],[.25,.12,.26]);
   scarf = new THREE.Group();scarf.position.set(-.42,3.66,.03);body.add(scarf);
   const shape=new THREE.Shape();shape.moveTo(0,0);shape.bezierCurveTo(-.3,.03,-.5,.22,-.8,.15);shape.lineTo(-1.05,.28);shape.lineTo(-.99,.02);shape.bezierCurveTo(-.65,-.12,-.3,-.15,0,-.1);
-  const cloth=mesh(new THREE.ShapeGeometry(shape,20),new THREE.MeshStandardMaterial({color:0xde876e,side:THREE.DoubleSide,roughness:1}),scarf);cloth.rotation.x=.15;
+  scarfCloth=mesh(new THREE.ShapeGeometry(shape,20),new THREE.MeshStandardMaterial({color:0xde876e,side:THREE.DoubleSide,roughness:1}),scarf);scarfCloth.userData.rest=Float32Array.from(scarfCloth.geometry.attributes.position.array);
 }
 
 function palm(x,z,size=1) {
@@ -190,10 +224,36 @@ function buildAtmosphere() {
 
 function alignRod(m,a,b) {const d=b.clone().sub(a);m.position.copy(a).add(b).multiplyScalar(.5);m.scale.set(1,d.length(),1);m.quaternion.setFromUnitVectors(V(0,1,0),d.normalize());}
 function pose(t) {
-  wheels.forEach(w=>w.rotation.z=-t*2.8);crank.rotation.z=-t*2.8;
-  body.position.y=Math.sin(t*5.6)*.028;body.rotation.x=Math.sin(t*2.8)*.015;
-  head.rotation.z=Math.sin(t*.9)*.025;scarf.rotation.x=.1+Math.sin(t*5)*.13;scarf.rotation.y=Math.sin(t*3.6)*.12;
-  for(const {side,upper,lower,foot} of legs){const p=-t*2.8+(side>0?Math.PI:0);const pedal=V(-.15+Math.cos(p)*.32,.83+Math.sin(p)*.32,side*.28);const hip=V(-.64,2.6,side*.26);const knee=V(-.08+Math.cos(p-.7)*.13,1.67+Math.sin(p)*.15,side*.34);alignRod(upper,hip,knee);alignRod(lower,knee,pedal);foot.position.copy(pedal).add(V(.08,.04,0));foot.rotation.z=Math.sin(p)*.13;}
+  wheels.forEach(w=>w.rotation.z=-wheelPhase);crank.rotation.z=-pedalPhase;
+  pedals.forEach(p=>p.rotation.z=pedalPhase);
+  const breath=Math.sin(t*1.65),effort=Math.sin(pedalPhase*2);
+  body.position.y=effort*.018;body.rotation.x=Math.sin(pedalPhase)*.018;
+  chest.scale.y=.8+breath*.012;chest.scale.z=.56+breath*.008;
+  // Small, overlapping gestures avoid moving the entire bird as a rigid assembly.
+  const glance=Math.pow(Math.max(0,Math.sin(t*.43-.8)),8);
+  head.rotation.set(Math.sin(t*1.1)*.018,glance*.18,Math.sin(t*1.65-.45)*.027+effort*.012);
+  const blinkTime=t%5.7,blink=Math.max(0,1-Math.abs(blinkTime-4.35)/.13);
+  eyes.forEach(e=>e.scale.y=1-blink*.94);
+  pouch.scale.y=.28+breath*.007;
+  tailFan.rotation.x=Math.sin(pedalPhase-.5)*.035;tailFan.rotation.z=Math.sin(t*2.2)*.025;
+  scarf.rotation.x=.1+Math.sin(t*3.8)*.08;
+  const positions=scarfCloth.geometry.attributes.position,rest=scarfCloth.userData.rest;
+  for(let i=0;i<positions.count;i++){const x=rest[i*3],weight=Math.min(1,-x);positions.setXYZ(i,x,rest[i*3+1]+Math.sin(t*5+x*5)*weight*.055,Math.sin(t*6+x*7)*weight*.1);}
+  positions.needsUpdate=true;scarfCloth.geometry.computeVertexNormals();
+  body.updateMatrix();const inverse=body.matrix.clone().invert();
+  for(const {side,upper,lower,hand} of wings){
+    const shoulder=V(-.77,3.24,side*.46),elbow=V(-.25,2.77+effort*.012,side*.69),grip=V(1.1,2.34,side*.4).applyMatrix4(inverse);
+    alignRod(upper,elbow,shoulder);upper.scale.y/=1.15;
+    alignRod(lower,grip,elbow);lower.scale.y/=1.05;hand.position.copy(grip);
+  }
+  for(const {side,upper,lower,foot,haunch,knee} of legs){
+    const p=-pedalPhase+(side>0?Math.PI:0),pedal=V(-.15+Math.cos(p)*.32,.83+Math.sin(p)*.32,side*.29);
+    const ankle=pedal.clone().add(V(0,.045,0)).applyMatrix4(inverse),hip=V(-.72,2.5,side*.32),delta=ankle.clone().sub(hip),d=delta.length(),dir=delta.clone().normalize();
+    const upperLength=1,lowerLength=1.18,along=(d*d+upperLength**2-lowerLength**2)/(2*d),height=Math.sqrt(Math.max(0,upperLength**2-along**2));
+    const bend=V(1,0,0).addScaledVector(dir,-dir.x).normalize(),joint=hip.clone().addScaledVector(dir,along).addScaledVector(bend,height);
+    alignRod(upper,hip,joint);alignRod(lower,joint,ankle);knee.position.copy(joint);const thighDirection=joint.clone().sub(hip).normalize();haunch.position.copy(hip).addScaledVector(thighDirection,.18);haunch.quaternion.setFromUnitVectors(V(0,1,0),thighDirection);
+    foot.position.copy(ankle);foot.quaternion.copy(body.quaternion).invert();
+  }
 }
 
 function resize(){const r=$('scene').getBoundingClientRect();if(!r.width||!r.height)return;renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(state.view==='overview')setOverview(false);renderer.render(scene,camera);}
@@ -204,9 +264,16 @@ function updateViewButtons(){document.querySelectorAll('[data-view]').forEach(b=
 function setView(view){state.view=view;updateViewButtons();if(view==='overview'){setOverview();return;}const p=rider.position.clone();const offset=view==='detail'?V(5.8,3.3,7.4):V(7.5,4.7,10);offset.applyAxisAngle(V(0,1,0),rider.rotation.y);moveCamera(p.clone().add(offset),p.clone().add(V(.2,2.2,0)));}
 function animate(now) {
   requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.05);last=now;if(document.hidden)return;
-  if(state.playing){elapsed+=dt;state.phase+=dt*state.speed;state.distance+=dt*state.speed*.00145;if(state.journey)state.angle-=dt*state.speed*.125;}
-  const theta=state.angle;rider.position.set(Math.cos(theta)*5.95,.13,Math.sin(theta)*5.95*.86);rider.rotation.y=Math.atan2(-.86*Math.cos(theta),Math.sin(theta));
-  rider.rotation.z=state.journey?Math.sin(state.phase*2.8)*.012:0;pose(state.phase);
+  if(state.playing){
+    elapsed+=dt;state.phase+=dt*state.speed;const travel=route.speed*dt*state.speed;
+    wheelPhase+=travel/route.wheelRadius;pedalPhase+=travel/route.wheelRadius/1.6;
+    if(state.journey){
+      // Midpoint integration maintains constant road speed around the ellipse.
+      const arcSpeed=a=>Math.hypot(route.a*Math.sin(a),route.b*Math.cos(a));
+      const midpoint=state.angle-travel/(2*arcSpeed(state.angle));state.angle-=travel/arcSpeed(midpoint);state.distance+=travel*.002;
+    }
+  }
+  placeRider();pose(state.phase);
   sea.material.uniforms.uTime.value=elapsed;
   if(!reducedMotion.matches){for(let i=0;i<palms.length;i++)palms[i].rotation.z=Math.sin(elapsed*.7+i)*.018;for(const c of clouds){c.group.position.x=c.x+Math.sin(elapsed*.075+c.x)*.45;c.group.position.y+=Math.sin(elapsed*.2+c.x)*.0003;}for(let i=0;i<gulls.length;i++){const g=gulls[i],a=elapsed*.09+g.phase;g.group.position.set(Math.cos(a)*g.radius,g.y+Math.sin(a*3)*.2,Math.sin(a)*g.radius*.7);g.group.rotation.y=-a;g.left.rotation.x=Math.sin(elapsed*3.3+i)*.3;g.right.rotation.x=-Math.sin(elapsed*3.3+i)*.3;}}
   const n=sea.material.uniforms.uNight;n.value=THREE.MathUtils.damp(n.value,state.night?1:0,2.2,dt);skyLight.intensity=THREE.MathUtils.lerp(2.3,.75,n.value);keyLight.intensity=THREE.MathUtils.lerp(3.6,.65,n.value);keyLight.color.set(0xffe5bc).lerp(new THREE.Color(0x93b6e8),n.value);renderer.toneMappingExposure=THREE.MathUtils.lerp(1.2,.95,n.value);lighthouseLight.intensity=n.value*6;sun.material.color.set(0xf1d58a).lerp(new THREE.Color(0xf2f2cc),n.value);stars[0].material.opacity=n.value*.85;
@@ -224,7 +291,7 @@ function audio(){if(!audioContext)audioContext=new (window.AudioContext||window.
 function ringBell(){try{const a=audio();for(let i=0;i<2;i++){const t=a.currentTime+i*.17;for(const f of [1800,2760,4210]){const o=a.createOscillator(),g=a.createGain();o.type='sine';o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.07*(1800/f),t+.003);g.gain.exponentialRampToValueAtTime(.0001,t+.8);o.connect(g).connect(a.destination);o.start(t);o.stop(t+.82);}}toast('叮铃～借过一阵海风。');$('bell').animate([{transform:'rotate(0deg)'},{transform:'rotate(-20deg)'},{transform:'rotate(18deg)'},{transform:'rotate(0deg)'}],{duration:450});}catch{toast('当前浏览器无法播放声音');}}
 function toggleSound(){try{const a=audio();if(!windSource){const buffer=a.createBuffer(1,a.sampleRate*5,a.sampleRate),data=buffer.getChannelData(0);let b=0;for(let i=0;i<data.length;i++){b=(b+Math.random()*.04-.02)/1.02;data[i]=b*4;}windSource=a.createBufferSource();windSource.buffer=buffer;windSource.loop=true;const filter=a.createBiquadFilter();filter.type='lowpass';filter.frequency.value=650;windGain=a.createGain();windGain.gain.value=0;windSource.connect(filter).connect(windGain).connect(a.destination);windSource.start();}state.sound=!state.sound;windGain.gain.setTargetAtTime(state.sound?.22:0,a.currentTime,.4);$('sound').setAttribute('aria-pressed',String(state.sound));$('sound').setAttribute('aria-label',state.sound?'关闭海风声':'开启海风声');toast(state.sound?'闭上眼，也能听见海。':'海风声已关闭');}catch{toast('当前浏览器无法播放声音');}}
 function savePhoto(){try{renderer.render(scene,camera);const c=document.createElement('canvas');c.width=1600;c.height=1200;const ctx=c.getContext('2d');ctx.fillStyle=state.night?'#182e36':'#f5f3e9';ctx.fillRect(0,0,c.width,c.height);const source=renderer.domElement,ratio=Math.min(1540/source.width,1020/source.height),w=source.width*ratio,h=source.height*ratio;ctx.drawImage(source,(1600-w)/2,30+(1020-h)/2,w,h);ctx.fillStyle=state.night?'#eeefdb':'#293e37';ctx.font='bold 32px sans-serif';ctx.fillText('PELICAN / THE SLOW LANE',75,1100);ctx.font='17px sans-serif';ctx.fillText('GOOD DAYS, EASY WAYS.     Nº 001 — COASTAL RIDE',75,1140);ctx.textAlign='right';ctx.fillText(state.night?'A NIGHT TO REMEMBER.':'A LITTLE PIECE OF FREEDOM.',1525,1120);c.toBlob(blob=>{if(!blob){toast('图片保存失败，请再试一次');return;}const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`pelican-postcard-${state.night?'moonlight':'sunshine'}.png`;a.click();setTimeout(()=>URL.revokeObjectURL(url),15000);toast('海风已打包，明信片正在保存。');},'image/png');$('flash').classList.remove('on');void $('flash').offsetWidth;$('flash').classList.add('on');}catch{toast('图片保存失败，请再试一次');}}
-function reset(){state.distance=0;state.phase=0;state.angle=Math.PI/2;state.journey=false;state.speed=1;state.playing=!reducedMotion.matches;$('speed').value='1';$('speed-value').value='1.0×';$('journey-label').textContent='开启环岛旅程';setView('overview');updatePlay();toast('新的旅程，从此刻开始。');}
+function reset(){state.distance=0;state.phase=0;wheelPhase=0;pedalPhase=0;state.angle=Math.PI/2;state.journey=false;state.speed=1;state.playing=!reducedMotion.matches;$('speed').value='1';$('speed-value').value='1.0×';$('journey-label').textContent='开启环岛旅程';placeRider();pose(0);setView('overview');updatePlay();toast('新的旅程，从此刻开始。');}
 function bindUI(){
   $('play').addEventListener('click',togglePlay);$('speed').addEventListener('input',e=>{state.speed=+e.target.value;$('speed-value').value=state.speed.toFixed(1)+'×';});
   $('journey').addEventListener('click',()=>{state.journey=!state.journey;if(state.journey)state.playing=true;$('journey-label').textContent=state.journey?'停驻这一刻':'开启环岛旅程';updatePlay();toast(state.journey?'出发吧，绕一圈也不必有目的。':'就在这里，多看一会儿海。');});
