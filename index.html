@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f3e9"><meta name="description" content="去海边，慢慢骑。与鹈鹕一起踏上一段交互式 3D 海岸旅程。">
+  <title>PELICAN — 去海边，慢慢骑。</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23c5d872'/%3E%3Cpath d='M19 46V25a11 11 0 0 1 22 0H28v21' fill='%23f9f5e8'/%3E%3Cpath d='M36 24h22L39 34z' fill='%23ed9f46'/%3E%3Ccircle cx='35' cy='19' r='2' fill='%23263930'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="./" aria-label="PELICAN 首页"><svg viewBox="0 0 42 42" aria-hidden="true"><path d="M9 34V15a10 10 0 0 1 20 0H18v19" fill="currentColor"/><path d="M25 14h16L28 23z" fill="#dc8d43"/><circle cx="23" cy="10" r="1.7" fill="#f5f3e9"/></svg><span>PELICAN<span class="brand-small">A LITTLE ESCAPE STUDIO</span></span></a>
+    <div class="edition"><span class="tiny-dot"></span> INTERACTIVE POSTCARD <span class="edition-no">Nº 001 / 海岸篇</span></div>
+    <button class="about-button" id="about" aria-label="打开旅程指南">旅程指南 <span>↗</span></button>
+  </header>
+
+  <main>
+    <section class="intro" aria-labelledby="title">
+      <div class="eyebrow"><span class="line"></span> 给生活，留一点空白</div>
+      <h1 id="title">去海边，<br>慢慢<span class="ride-word">骑<svg viewBox="0 0 130 14" aria-hidden="true"><path d="M3 9Q60-3 126 7"/></svg></span>。</h1>
+      <p class="intro-en">LIFE IN THE SLOW LANE.</p>
+      <p class="description">今天没有截止时间。<br>只有一只鹈鹕、一辆单车，<br>和刚好吹来的海风。</p>
+      <button class="journey-button" id="journey"><span class="journey-icon">↗</span><span id="journey-label">开启环岛旅程</span><span class="button-small">LET’S RIDE</span></button>
+      <div class="postmark"><svg viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="26"/><path d="M13 33q8-11 17 0t17 0M13 40q8-11 17 0t17 0"/><path d="M30 10v8m-13-2 5 6m21-6-5 6"/><circle cx="30" cy="29" r="7"/></svg><span>心情放晴<br><b>GOOD DAYS, EASY WAYS.</b></span></div>
+    </section>
+
+    <section class="scene-section" aria-label="鹈鹕骑自行车的交互式 3D 海岛场景">
+      <div id="scene"></div>
+      <div id="loading" class="loading"><span class="loader-wheel"></span><span>海风正在赶来…</span></div>
+      <div class="scene-caption"><span class="tiny-dot"></span><span id="scene-weather">晴 · 适合漫无目的</span></div>
+      <div class="scene-hint" id="scene-hint"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7V4m0 0L2 7m3-3 3 3M15 13v3m0 0 3-3m-3 3-3-3M4 11c-1 6 12 7 12-2M16 9c1-6-12-7-12-2"/></svg> 拖动旋转 · 滚动缩放</div>
+      <div class="vertical-note">A SMALL ISLAND. A BIG BREATH.</div>
+      <div class="scene-toolbar" role="group" aria-label="场景工具">
+        <button id="daynight" class="icon-button" aria-label="切换为月夜" title="切换昼夜 · N"><svg id="sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button>
+        <button id="bell" class="icon-button" aria-label="按响自行车铃" title="叮铃 · B"><svg viewBox="0 0 24 24"><path d="M5 16h14l-2-3V9a5 5 0 0 0-10 0v4zM10 19q2 3 4 0M12 2v2"/></svg></button>
+        <button id="photo" class="icon-button" aria-label="保存海岛明信片" title="保存明信片 · P"><svg viewBox="0 0 24 24"><path d="M3 7h5l2-3h4l2 3h5v13H3z"/><circle cx="12" cy="13" r="4"/></svg></button>
+        <button id="sound" class="icon-button" aria-label="开启海风声" aria-pressed="false" title="海风声 · M"><svg viewBox="0 0 24 24"><path d="M10 5 5 9H2v6h3l5 4zM14 8q5 4 0 8M17 5q8 7 0 14"/><path class="sound-slash" d="m3 2 18 20"/></svg></button>
+      </div>
+      <div class="view-switch" role="group" aria-label="选择镜头"><button data-view="overview" aria-pressed="true">全景</button><button data-view="follow" aria-pressed="false">跟随</button><button data-view="detail" aria-pressed="false">特写</button></div>
+    </section>
+
+    <section class="ride-panel" aria-label="骑行控制">
+      <button id="play" class="play-button" aria-label="暂停骑行" aria-pressed="false"><svg id="play-icon" viewBox="0 0 24 24"><path d="M8 6v12M16 6v12"/></svg></button>
+      <div class="ride-info"><span class="small-label">YOUR PACE, YOUR PLACE.</span><span id="ride-status">正在慢骑 <span class="status-wave">～</span></span></div>
+      <div class="speed-control"><label for="speed">骑行速度 <output id="speed-value" for="speed">1.0×</output></label><input id="speed" type="range" min="0.3" max="2.5" step="0.1" value="1" aria-label="骑行速度"><div class="speed-extremes"><span>慢悠悠</span><span>追上海风</span></div></div>
+      <button id="reset" class="reset-button" aria-label="重置旅程" title="重置 · R"><svg viewBox="0 0 24 24"><path d="M5 7a8 8 0 1 1-1 9M5 2v6h6"/></svg></button>
+    </section>
+    <div class="journey-stats"><span class="stat-number" id="distance">0.00</span><span class="stat-unit">km<br>好心情里程</span><div class="stat-separator"></div><span class="stamp-number">100%</span><span class="stat-unit">此时此刻<br>JUST BE HERE.</span></div>
+  </main>
+  <footer><span>BUILT FOR THE JOY OF GOING NOWHERE.</span><span>实时 3D · 一小段自由 <span class="footer-star">✳</span></span></footer>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div><div class="flash" id="flash"></div>
+  <dialog id="guide"><button id="close-guide" class="close-guide" aria-label="关闭指南">×</button><div class="small-label">A LITTLE FIELD GUIDE</div><h2>不必着急，<br>风景一直都在。</h2><p>拖动海岛，寻找喜欢的角度。点击「开启环岛旅程」，陪鹈鹕绕着小岛兜一圈。所有里程都是这段虚拟旅程的记录。</p><div class="guide-keys"><span><kbd>空格</kbd> 暂停 / 继续</span><span><kbd>N</kbd> 昼夜切换</span><span><kbd>B</kbd> 叮铃打招呼</span><span><kbd>P</kbd> 保存明信片</span><span><kbd>M</kbd> 海风声</span><span><kbd>R</kbd> 重新出发</span></div><p class="guide-note">为你实时绘制的立体小世界。<br>海风声在开启后播放；明信片会保存为 PNG 图片。</p></dialog>
+  <noscript><div class="noscript">这段 3D 旅程需要启用 JavaScript。请在浏览器设置中开启后刷新页面。</div></noscript>
+  <script type="module" src="./app.js"></script>
+</body></html>
