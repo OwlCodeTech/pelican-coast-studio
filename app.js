@@ -34,7 +34,9 @@ function init() {
   const rim = new THREE.DirectionalLight(0xc8f4ed,1.2);rim.position.set(8,7,-8);scene.add(rim);
   Object.assign(mats,{cream:mat(0xfaf2d9),wing:mat(0xe5e5cf),wingTip:mat(0x42564f),orange:mat(0xf0a943),pouch:mat(0xe6a04b),dark:mat(0x2b413d),mint:mat(0x82c9b1,.35,.15),tire:mat(0x354849,.9),rim:mat(0xf3e9cc,.45,.4),metal:mat(0xa3b0a3,.3,.65),coral:mat(0xdb8068),sand:mat(0xeedfc0),grass:mat(0xd1db9a),trunk:mat(0xa99065),leaf:mat(0x66987c),road:mat(0xb6c2ac),paint:mat(0xf6f1db),white:mat(0xf5efd9),roof:mat(0xce7b60),rock:mat(0xb8bd9e)});
   buildIsland();buildBike();buildPelican();buildScenery();buildAtmosphere();
-  setOverview(true);resize();window.addEventListener('resize',resize);bindUI();updatePlay();
+  setOverview(true);resize();
+  // Observe the actual scene box: responsive layout can settle after window.resize.
+  new ResizeObserver(resize).observe($('scene'));bindUI();updatePlay();
   renderer.domElement.addEventListener('webglcontextlost',(e)=>{e.preventDefault();state.playing=false;updatePlay();toast('画面暂时休息了，刷新页面即可继续旅程');});
   renderer.compile(scene,camera);renderer.render(scene,camera);$('loading').classList.add('loaded');
   window.__pelican = {state, renderer, scene, camera, get wheels(){return wheels;},get rider(){return rider;}};
@@ -194,7 +196,7 @@ function pose(t) {
   for(const {side,upper,lower,foot} of legs){const p=-t*2.8+(side>0?Math.PI:0);const pedal=V(-.15+Math.cos(p)*.32,.83+Math.sin(p)*.32,side*.28);const hip=V(-.64,2.6,side*.26);const knee=V(-.08+Math.cos(p-.7)*.13,1.67+Math.sin(p)*.15,side*.34);alignRod(upper,hip,knee);alignRod(lower,knee,pedal);foot.position.copy(pedal).add(V(.08,.04,0));foot.rotation.z=Math.sin(p)*.13;}
 }
 
-function resize(){const r=$('scene').getBoundingClientRect();renderer.setSize(r.width,r.height);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(state.view==='overview')setOverview(false);}
+function resize(){const r=$('scene').getBoundingClientRect();if(!r.width||!r.height)return;renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();if(state.view==='overview')setOverview(false);renderer.render(scene,camera);}
 function overviewPosition(){return innerWidth<761?V(12.8,10.2,18.8):V(13.8,10.3,20.2);}
 function setOverview(immediate=false) {const p=overviewPosition();const target=V(0,1.8,.2);if(immediate){camera.position.copy(p);controls.target.copy(target);controls.update();}else moveCamera(p,target);}
 function moveCamera(position,target){cameraTween={from:camera.position.clone(),to:position,fromTarget:controls.target.clone(),target,start:performance.now(),duration:1300};}
